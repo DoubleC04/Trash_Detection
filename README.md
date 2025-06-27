@@ -36,24 +36,4 @@ Each model is trained on the Roboflow dataset and fine-tuned for waste detection
 
 Link to 3 models has been finetune: [here](https://drive.google.com/drive/folders/1Qhn4AzVIjlA902Zj0uF8ijNUQ5xYjQ33?usp=drive_link)
 
-## Installation
-To set up the project locally, follow these steps:
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/DoubleC04/Trash_Detection.git
-   cd Trash_Detection
-   ```
-
-2. **Create a virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Usage
+## Link product: https://trash.dnggnd.online/
