@@ -3,6 +3,7 @@ import { Camera, Zap, Loader2, AlertTriangle, ArrowLeft, Wifi, WifiOff, RefreshC
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { analyzeWithLLM } from '@/services/objectDetection';
 import BoundingBoxOverlay from './BoundingBoxOverlay';
 import AnalysisResults from './AnalysisResults';
 import ModelSelector from './ModelSelector';
@@ -20,7 +21,10 @@ interface AnalysisResult {
   recyclable: boolean;
 }
 
+
 const WasteDetectionApp = () => {
+  const analyzedImageRef = useRef<HTMLImageElement | null>(null);
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -165,129 +169,233 @@ const WasteDetectionApp = () => {
     }
   };
 
+  // const startCamera = async (retryCount = 0) => {
+  //   try {
+  //     setError(null);
+  //     console.log('Starting camera, attempt:', retryCount + 1);
+
+  //     // Stop any existing stream first
+  //     if (streamRef.current) {
+  //       streamRef.current.getTracks().forEach(track => track.stop());
+  //       streamRef.current = null;
+  //     }
+
+  //     const cameraConfigs = [
+  //       {
+  //         video: {
+  //           width: { min: 640, ideal: 1280, max: 1920 },
+  //           height: { min: 480, ideal: 720, max: 1080 },
+  //           facingMode: 'environment'
+  //         }
+  //       },
+  //       {
+  //         video: {
+  //           width: { ideal: 640 },
+  //           height: { ideal: 480 },
+  //           facingMode: 'environment'
+  //         }
+  //       },
+  //       {
+  //         video: {
+  //           width: { ideal: 640 },
+  //           height: { ideal: 480 },
+  //           facingMode: 'user'
+  //         }
+  //       },
+  //       {
+  //         video: {
+  //           width: { ideal: 640 },
+  //           height: { ideal: 480 }
+  //         }
+  //       },
+  //       { video: true }
+  //     ];
+
+  //     const config = cameraConfigs[Math.min(retryCount, cameraConfigs.length - 1)];
+  //     console.log('Trying camera config:', config);
+
+  //     const stream = await navigator.mediaDevices.getUserMedia(config);
+  //     console.log('Stream tracks:', stream.getVideoTracks().map(track => ({
+  //       label: track.label,
+  //       enabled: track.enabled,
+  //       readyState: track.readyState,
+  //       settings: track.getSettings(),
+  //     })));
+
+  //     streamRef.current = stream;
+
+  //     setIsStreaming(true);
+  //     console.log('isStreaming set to true before checking videoRef');
+
+  //     if (videoRef.current) {
+  //       console.log('videoRef.current exists:', videoRef.current);
+  //       videoRef.current.srcObject = stream;
+  //       console.log('srcObject assigned:', videoRef.current.srcObject);
+  //       videoRef.current.onloadedmetadata = () => {
+  //         console.log('Video metadata:', {
+  //           videoWidth: videoRef.current?.videoWidth,
+  //           videoHeight: videoRef.current?.videoHeight,
+  //         });
+  //         setVideoDimensions({
+  //           width: videoRef.current.videoWidth || videoRef.current.clientWidth,
+  //           height: videoRef.current.videoHeight || videoRef.current.clientHeight,
+  //         });
+  //         setIsStreaming(true);
+  //         console.log('isStreaming set to true in loadedmetadata');
+  //       };
+  //       try {
+  //         await videoRef.current.play();
+  //         console.log('Video is playing');
+  //         console.log('isStreaming set to true after play');
+  //         setCameraPermission('granted');
+  //       } catch (playError) {
+  //         console.error('Video play failed:', playError);
+  //         setError(`Không thể phát video: ${playError.message}`);
+  //       }
+  //     } else {
+  //       console.error('videoRef.current is null');
+  //       setError('Không tìm thấy phần tử video. Vui lòng kiểm tra lại giao diện.');
+  //     }
+  //   } catch (err: any) {
+  //     console.error('Camera access error:', err);
+  //     setCameraPermission('denied');
+
+  //     let errorMessage = 'Unable to access camera. ';
+
+  //     switch (err.name) {
+  //       case 'NotAllowedError':
+  //         errorMessage += 'Please grant camera permission and reload the page.';
+  //         break;
+  //       case 'NotFoundError':
+  //         errorMessage += 'No camera found on this device.';
+  //         break;
+  //       case 'NotReadableError':
+  //         if (retryCount < 4) {
+  //           console.log('Camera busy, retrying...');
+  //           setTimeout(() => startCamera(retryCount + 1), 2000);
+  //           return;
+  //         }
+  //         errorMessage += 'Camera is being used by another application. Please close other apps using the camera and try again.';
+  //         break;
+  //       case 'OverconstrainedError':
+  //         if (retryCount < 4) {
+  //           setTimeout(() => startCamera(retryCount + 1), 500);
+  //           return;
+  //         }
+  //         errorMessage += 'Camera configuration not supported.';
+  //         break;
+  //       default:
+  //         errorMessage += `Unknown error (${err.name}). Please try again.`;
+  //     }
+
+  //     setError(errorMessage);
+  //     setIsStreaming(false);
+  //   }
+  // };
+
+
   const startCamera = async (retryCount = 0) => {
     try {
       setError(null);
       console.log('Starting camera, attempt:', retryCount + 1);
 
-      // Stop any existing stream first
+      // Stop previous stream
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
 
-      const cameraConfigs = [
-        {
-          video: {
-            width: { min: 640, ideal: 1280, max: 1920 },
-            height: { min: 480, ideal: 720, max: 1080 },
-            facingMode: 'environment'
-          }
-        },
-        {
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            facingMode: 'environment'
-          }
-        },
-        {
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            facingMode: 'user'
-          }
-        },
-        {
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }
-        },
-        { video: true }
-      ];
+      // Get all video input devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+      console.log('Available cameras:', videoInputs.map((d) => d.label));
 
-      const config = cameraConfigs[Math.min(retryCount, cameraConfigs.length - 1)];
-      console.log('Trying camera config:', config);
+      // Find DroidCam device if available
+      const droidCamDevice = videoInputs.find((d) => d.label.toLowerCase().includes('droidcam'));
+
+      const config = droidCamDevice
+        ? {
+            video: {
+              deviceId: { exact: droidCamDevice.deviceId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          }
+        : {
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 640 },
+              height: { ideal: 480 }
+            }
+          };
+
+      console.log('Using config:', config);
 
       const stream = await navigator.mediaDevices.getUserMedia(config);
-      console.log('Stream tracks:', stream.getVideoTracks().map(track => ({
-        label: track.label,
-        enabled: track.enabled,
-        readyState: track.readyState,
-        settings: track.getSettings(),
-      })));
-
       streamRef.current = stream;
 
+      console.log(
+        'Stream tracks:',
+        stream.getVideoTracks().map((track) => ({
+          label: track.label,
+          settings: track.getSettings()
+        }))
+      );
+
       setIsStreaming(true);
-      console.log('isStreaming set to true before checking videoRef');
 
       if (videoRef.current) {
-        console.log('videoRef.current exists:', videoRef.current);
         videoRef.current.srcObject = stream;
-        console.log('srcObject assigned:', videoRef.current.srcObject);
         videoRef.current.onloadedmetadata = () => {
-          console.log('Video metadata:', {
-            videoWidth: videoRef.current?.videoWidth,
-            videoHeight: videoRef.current?.videoHeight,
-          });
-          setVideoDimensions({
-            width: videoRef.current.videoWidth || videoRef.current.clientWidth,
-            height: videoRef.current.videoHeight || videoRef.current.clientHeight,
-          });
+          const width = videoRef.current?.videoWidth || videoRef.current?.clientWidth;
+          const height = videoRef.current?.videoHeight || videoRef.current?.clientHeight;
+          setVideoDimensions({ width, height });
           setIsStreaming(true);
-          console.log('isStreaming set to true in loadedmetadata');
         };
-        try {
-          await videoRef.current.play();
-          console.log('Video is playing');
-          console.log('isStreaming set to true after play');
-          setCameraPermission('granted');
-        } catch (playError) {
-          console.error('Video play failed:', playError);
-          setError(`Không thể phát video: ${playError.message}`);
-        }
+        await videoRef.current.play();
+        setCameraPermission('granted');
       } else {
-        console.error('videoRef.current is null');
-        setError('Không tìm thấy phần tử video. Vui lòng kiểm tra lại giao diện.');
+        setError('Không tìm thấy phần tử video.');
       }
     } catch (err: any) {
       console.error('Camera access error:', err);
       setCameraPermission('denied');
 
-      let errorMessage = 'Unable to access camera. ';
+      let errorMessage = 'Không thể truy cập camera. ';
 
       switch (err.name) {
         case 'NotAllowedError':
-          errorMessage += 'Please grant camera permission and reload the page.';
+          errorMessage += 'Vui lòng cấp quyền camera và tải lại trang.';
           break;
         case 'NotFoundError':
-          errorMessage += 'No camera found on this device.';
+          errorMessage += 'Không tìm thấy thiết bị camera.';
           break;
         case 'NotReadableError':
           if (retryCount < 4) {
-            console.log('Camera busy, retrying...');
-            setTimeout(() => startCamera(retryCount + 1), 2000);
+            console.warn('Camera đang bận, thử lại...');
+            setTimeout(() => startCamera(retryCount + 1), 1500);
             return;
           }
-          errorMessage += 'Camera is being used by another application. Please close other apps using the camera and try again.';
+          errorMessage += 'Camera đang bị ứng dụng khác sử dụng.';
           break;
         case 'OverconstrainedError':
           if (retryCount < 4) {
+            console.warn('Config không hợp lệ, thử lại...');
             setTimeout(() => startCamera(retryCount + 1), 500);
             return;
           }
-          errorMessage += 'Camera configuration not supported.';
+          errorMessage += 'Cấu hình camera không được hỗ trợ.';
           break;
         default:
-          errorMessage += `Unknown error (${err.name}). Please try again.`;
+          errorMessage += `Lỗi không xác định (${err.name})`;
       }
 
       setError(errorMessage);
       setIsStreaming(false);
     }
   };
+
+
 
   const stopCamera = () => {
     console.log('Stopping camera');
@@ -307,6 +415,7 @@ const WasteDetectionApp = () => {
       reader.readAsDataURL(file);
     }
   };
+  
 
   const handleAnalyze = async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -351,7 +460,8 @@ const WasteDetectionApp = () => {
       setIsAnalyzing(true);
       const analyses: AnalysisResult[] = objects.map((obj, index) => ({
         objectId: obj.id,
-        analysis: `${obj.className.replace('_', ' ')} detected with ${Math.round(obj.confidence * 100)}% confidence. Click for detailed recycling information.`,
+        analysis: obj.analysis,
+        // analysis: `${obj.className.replace('_', ' ')} detected with ${Math.round(obj.confidence * 100)}% confidence. Click for detailed recycling information.`,
         category: getCategoryFromClass(obj.className),
         recyclable: getRecyclableStatus(obj.className)
       }));
@@ -364,6 +474,8 @@ const WasteDetectionApp = () => {
       setIsAnalyzing(false);
     }
   };
+
+
 
   const resetDetection = () => {
     setCapturedImage(null);
@@ -632,17 +744,24 @@ const WasteDetectionApp = () => {
               <CardContent className="p-6">
                 <div className="relative bg-black/40 rounded-xl overflow-hidden mb-6 border border-teal-400/20">
                   <img
+                    ref={analyzedImageRef}
                     src={capturedImage!}
                     alt="Captured frame"
                     className="w-full h-80 object-cover brightness-110 contrast-125"
+                    onLoad={() => {
+                      if (analyzedImageRef.current) {
+                        const rect = analyzedImageRef.current.getBoundingClientRect();
+                        setImageDimensions({ width: rect.width, height: rect.height });
+                      }
+                    }}
                   />
 
                   <BoundingBoxOverlay
                     boxes={boundingBoxes}
                     videoWidth={videoDimensions.width}
                     videoHeight={videoDimensions.height}
-                    containerWidth={containerDimensions.width}
-                    containerHeight={containerDimensions.height}
+                    containerWidth={imageDimensions.width}
+                    containerHeight={imageDimensions.height}
                   />
                 </div>
 
@@ -682,5 +801,6 @@ const WasteDetectionApp = () => {
     </div>
   );
 };
+
 
 export default WasteDetectionApp;
